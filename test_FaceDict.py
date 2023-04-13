@@ -281,7 +281,10 @@ if __name__ == '__main__':
         FaceResultPath = os.path.join(SaveRestorePath, ImgName)
         ParamPath = os.path.join(SaveParamPath, ImgName+'.npy')
         SaveWholePath = os.path.join(SaveFianlPath, ImgName)
-        reverse_align(WholeInputPath, FaceResultPath, ParamPath, SaveWholePath, UpScaleWhole)
+        try:
+            reverse_align(WholeInputPath, FaceResultPath, ParamPath, SaveWholePath, UpScaleWhole)
+        except(RuntimeError):
+            print("{} is orphaned! ..skipping..".format(ImgName))
+            continue
+        print('\nAll results are saved in {} \n'.format(ResultsDir))
 
-    print('\nAll results are saved in {} \n'.format(ResultsDir))
-    
