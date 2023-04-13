@@ -286,5 +286,5 @@ if __name__ == '__main__':
         except(RuntimeError):
             print("{} is orphaned! ..skipping..".format(ImgName))
             continue
-        print('\nAll results are saved in {} \n'.format(ResultsDir))
+    print('\nAll results are saved in {} \n'.format(ResultsDir))
 
