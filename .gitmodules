@@ -1,0 +1,6 @@
+[submodule "FaceLandmarkDetection/face-alignment"]
+	path = FaceLandmarkDetection/face-alignment
+	url = https://github.com/1adrianb/face-alignment
+[submodule "face-alignment"]
+	path = face-alignment
+	url = https://github.com/1adrianb/face-alignment

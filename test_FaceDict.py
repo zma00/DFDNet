@@ -1,4 +1,6 @@
 import os
+import warnings
+warnings.simplefilter(action='ignore', category=(DeprecationWarning,UserWarning))
 from options.test_options import TestOptions
 from data import CreateDataLoader
 from models import create_model
@@ -16,8 +18,7 @@ from skimage import transform as trans
 from skimage import io
 from data.image_folder import make_dataset
 import sys
-sys.path.append('FaceLandmarkDetection')
-import face_alignment
+from face_alignment.api import FaceAlignment
 
 ###########################################################################
 ################# functions of crop and align face images #################
@@ -60,24 +61,28 @@ def align_and_save(img_path, save_path, save_input_path, save_param_path, upsamp
     
 def reverse_align(input_path, face_path, param_path, save_path, upsample_scale=2):
     out_size = (512, 512) 
-    input_img = dlib.load_rgb_image(input_path)
-    h,w,_ = input_img.shape
-    face512 = dlib.load_rgb_image(face_path)
-    inv_M = np.loadtxt(param_path)
-    inv_crop_img = cv2.warpAffine(face512, inv_M, (w*upsample_scale,h*upsample_scale))
-    mask = np.ones((512, 512, 3), dtype=np.float32) #* 255
-    inv_mask = cv2.warpAffine(mask, inv_M, (w*upsample_scale,h*upsample_scale))
-    upsample_img = cv2.resize(input_img, (w*upsample_scale, h*upsample_scale))
-    inv_mask_erosion_removeborder = cv2.erode(inv_mask, np.ones((2 * upsample_scale, 2 * upsample_scale), np.uint8))# to remove the black border
-    inv_crop_img_removeborder = inv_mask_erosion_removeborder * inv_crop_img
-    total_face_area = np.sum(inv_mask_erosion_removeborder)//3
-    w_edge = int(total_face_area ** 0.5) // 20 #compute the fusion edge based on the area of face
-    erosion_radius = w_edge * 2
-    inv_mask_center = cv2.erode(inv_mask_erosion_removeborder, np.ones((erosion_radius, erosion_radius), np.uint8))
-    blur_size = w_edge * 2
-    inv_soft_mask = cv2.GaussianBlur(inv_mask_center,(blur_size + 1, blur_size + 1),0)
-    merge_img = inv_soft_mask * inv_crop_img_removeborder + (1 - inv_soft_mask) * upsample_img
-    io.imsave(save_path, merge_img.astype(np.uint8))
+    if os.path.exists(input_path):
+        input_img = dlib.load_rgb_image(input_path)
+        h,w,_ = input_img.shape
+        face512 = dlib.load_rgb_image(face_path)
+        inv_M = np.loadtxt(param_path)
+        inv_crop_img = cv2.warpAffine(face512, inv_M, (w*upsample_scale,h*upsample_scale))
+        mask = np.ones((512, 512, 3), dtype=np.float32) #* 255
+        inv_mask = cv2.warpAffine(mask, inv_M, (w*upsample_scale,h*upsample_scale))
+        upsample_img = cv2.resize(input_img, (w*upsample_scale, h*upsample_scale))
+        inv_mask_erosion_removeborder = cv2.erode(inv_mask, np.ones((2 * upsample_scale, 2 * upsample_scale), np.uint8))# to remove the black border
+        inv_crop_img_removeborder = inv_mask_erosion_removeborder * inv_crop_img
+        total_face_area = np.sum(inv_mask_erosion_removeborder)//3
+        w_edge = int(total_face_area ** 0.5) // 20 #compute the fusion edge based on the area of face
+        erosion_radius = w_edge * 2
+        inv_mask_center = cv2.erode(inv_mask_erosion_removeborder, np.ones((erosion_radius, erosion_radius), np.uint8))
+        blur_size = w_edge * 2
+        inv_soft_mask = cv2.GaussianBlur(inv_mask_center,(blur_size + 1, blur_size + 1),0)
+        merge_img = inv_soft_mask * inv_crop_img_removeborder + (1 - inv_soft_mask) * upsample_img
+        io.imsave(save_path, merge_img.astype(np.uint8))
+    else:
+        imgname = os.path.split(input_path)[-1]
+        print(f'{imgname} is orphaned!... skipping...')
 
 ###########################################################################
 ################ functions of preparing the test images ###################
@@ -198,7 +203,8 @@ if __name__ == '__main__':
         dev = 'cuda:{}'.format(opt.gpu_ids[0])
     else:
         dev = 'cpu'
-    FD = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D,device=dev, flip_input=False)
+    landmarks_type = "TWO_D"
+    FD = FaceAlignment(landmarks_type,device=dev, flip_input=False)
     if not os.path.exists(SaveLandmarkPath):
         os.makedirs(SaveLandmarkPath)
     ImgPaths = make_dataset(SaveCropPath)
@@ -270,21 +276,16 @@ if __name__ == '__main__':
     print('############### Step 4: Paste the Restored Face to the Input Image ############')
     print('###############################################################################\n')
 
-    SaveFianlPath = os.path.join(ResultsDir,'Step4_FinalResults')
-    if not os.path.exists(SaveFianlPath):
-        os.makedirs(SaveFianlPath)
+    SaveFinalPath = os.path.join(ResultsDir,'Step4_FinalResults')
+    if not os.path.exists(SaveFinalPath):
+        os.makedirs(SaveFinalPath)
     ImgPaths = make_dataset(SaveRestorePath)
     for i,ImgPath in enumerate(ImgPaths):
         ImgName = os.path.split(ImgPath)[-1]
-        print('Final Restoring {}'.format(ImgName))
         WholeInputPath = os.path.join(TestImgPath,ImgName)
         FaceResultPath = os.path.join(SaveRestorePath, ImgName)
         ParamPath = os.path.join(SaveParamPath, ImgName+'.npy')
-        SaveWholePath = os.path.join(SaveFianlPath, ImgName)
-        try:
-            reverse_align(WholeInputPath, FaceResultPath, ParamPath, SaveWholePath, UpScaleWhole)
-        except(RuntimeError):
-            print("{} is orphaned! ..skipping..".format(ImgName))
-            continue
+        SaveWholePath = os.path.join(SaveFinalPath, ImgName)
+        reverse_align(WholeInputPath, FaceResultPath, ParamPath, SaveWholePath, UpScaleWhole)
     print('\nAll results are saved in {} \n'.format(ResultsDir))
 

@@ -1,0 +1,10 @@
+# python==3.7
+torch==1.13
+torchvision
+scipy
+scikit-image
+dlib
+dominate
+opencv-python
+tqdm
+git+https://github.com/1adrianb/face-alignment
